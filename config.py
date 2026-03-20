@@ -1,5 +1,10 @@
 """
 Конфигурация для анализа дефектуры товаров
+
+Порог дефектуры:
+    - Если ЭО >= MIN_EO_FOR_PCT  →  дефектура при ГК < DEFECT_EO_PCT × ЭО
+    - Если ЭО < MIN_EO_FOR_PCT   →  дефектура только при ГК == 0
+    - Если КАГ нет в справочнике  →  дефектура только при ГК == 0
 """
 from pathlib import Path
 from typing import Dict
@@ -7,37 +12,40 @@ from typing import Dict
 
 class Config:
     """Централизованная конфигурация проекта"""
-    
+
     # === Пороги и параметры анализа ===
-    MIN_OBS_LAST30 = 3          # Минимум наблюдений за последние 30 дней
+    MIN_OBS_LAST30 = 3              # Минимум наблюдений за последние 30 дней
     LAST30_DAYS = 30
-    LOOKBACK_DEFECTS_DAYS = 90   # Период поиска дефектур (дней назад)
-    
-    # Порог дефектуры: остаток ГК < DEFECT_EO_PCT * ЭО
-    DEFECT_EO_DIVISOR = 20         # 10% от ЭО
-    MIN_EO_FOR_PCT = 5          # Если ЭО < этого значения — дефектура только при ГК == 0
-    
-    # Параметры детекции "прихода" у конкурентов
-    DELTA_ARRIVAL = 100                    # Абсолютное увеличение остатков
-    MIN_PCT_FROM_YESTERDAY = 0.1          # Относительное увеличение (10%)
-    
+    LOOKBACK_DEFECTS_DAYS = 90      # Период поиска дефектур (дней назад)
+
+    # ---------- Порог дефектуры ----------
+    # Дефектура = остаток ГК < DEFECT_EO_PCT × ЭО
+    # Пример: DEFECT_EO_PCT = 0.05 → ГК < 5 % от ЭО
+    DEFECT_EO_PCT = 0.05            # 5 % от ЭО  (эквивалент ЭО / 20)
+    MIN_EO_FOR_PCT = 5              # Если ЭО < 5 — дефектура только при ГК == 0
+    # -------------------------------------
+
+    # Параметры детекции «прихода» у конкурентов
+    DELTA_ARRIVAL = 100             # Абсолютное увеличение остатков (шт)
+    MIN_PCT_FROM_YESTERDAY = 0.10   # Относительное увеличение (10 % от вчера)
+
     # Визуализация
-    N_WIDE_LAST = 20                       # Последних наблюдений для графиков
-    
+    N_WIDE_LAST = 20                # Последних наблюдений для графиков
+
     # === Колонки датасета ===
     COL_DATE = "Дата"
     COL_KAG = "Код КАГ"
     COL_KAG_NAME = "Имя КАГ"
-    
+
     COL_GK = "ГК (остатки гранд капитала)"
     COL_PULS = "Пульс (остатки пульса)"
     COL_KATREN = "Катрен (остатки катрена)"
     COL_PROTEK = "Протек (остатки протека)"
     COL_FK = "Фармкомплект (остатки фармкомплекта)"
-    
+
     # Список конкурентов
     COMP_COLS = [COL_PULS, COL_KATREN, COL_PROTEK, COL_FK]
-    
+
     # Красивые названия для отчётов
     COMP_PRETTY: Dict[str, str] = {
         COL_PULS: "Пульс",
@@ -45,17 +53,17 @@ class Config:
         COL_PROTEK: "Протек",
         COL_FK: "Фармкомплект",
     }
-    
+
     # === Пути ===
     OUT_DIR = Path(r"C:\Проекты\Project_etl_power_bi\data\result")
     PLOTS_DIR = OUT_DIR / "графики_остатков"
     EO_FILE = Path(r"C:\Проекты\Project_etl_power_bi\data\result\EO.xlsx")
-    
+
     @classmethod
     def get_required_columns(cls) -> list:
         """Возвращает список обязательных колонок"""
         return [cls.COL_DATE, cls.COL_KAG, cls.COL_GK, *cls.COMP_COLS]
-    
+
     @classmethod
     def setup_directories(cls):
         """Создаёт необходимые директории для экспорта"""
@@ -65,15 +73,15 @@ class Config:
 
 class CategoryConfig:
     """Категории дефектуры по давности"""
-    
+
     @staticmethod
     def categorize_by_days_ago(days_ago: int) -> str:
         """
         Определяет категорию дефектуры по количеству дней
-        
+
         Args:
             days_ago: Сколько дней назад начался дефект
-            
+
         Returns:
             Название категории
         """

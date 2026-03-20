@@ -15,14 +15,14 @@ FILE_PATH = r"C:\Проекты\Project_etl_power_bi\data\result\final_merged_ta
 
 # Получатели отчёта
 RECIPIENTS = [
-    # "lipkina@grand-capital.pro",
+    "lipkina@grand-capital.pro",
     "DOKhokhlov@datauniverse.ru",
-    # 'KNPlakhtyukov@grand-capital.pro',
-    # 'TIVlasova@grand-capital.pro',
-    # 'NAvdeev@grand-capital.pro',
-    # 'ESavenkova@grand-capital.pro',
-    # 'EVasileva@grand-capital.pro',
-    # 'AADemidov@grand-capital.pro'
+    'KNPlakhtyukov@grand-capital.pro',
+    'TIVlasova@grand-capital.pro',
+    'NAvdeev@grand-capital.pro',
+    'ESavenkova@grand-capital.pro',
+    'EVasileva@grand-capital.pro',
+    'AADemidov@grand-capital.pro'
 ]
 # 
 # Получатели уведомлений об ошибках
@@ -38,9 +38,9 @@ BODY = """Добрый день, коллеги!
 Благодарим за обратную связь по файлу.
 
 Сейчас в работе комментарии Алексея Александровича и Константина Николеавича: 
-2. Добавить информацию о последней дате заказа, потребности, счёте
-4. Добавить информацию о последней дате поступления на наш склад
-5. Добавить информацию о товаре в пути
+2. Добавить информацию о последней дате заказа, потребности, счёте - Срок от отдела Домино начало Апреля
+4. Добавить информацию о последней дате поступления на наш склад - Срок от отдела Домино начало Апреля
+5. Добавить информацию о товаре в пути - 19.03.26
 
 Обновление статуса:
 1. Добавить привязку "Прямой поставщик - Менеджер" - Сегодня тестируем добавление. Пока некорректный список. 
