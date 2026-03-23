@@ -1,0 +1,8 @@
+pandas>=2.0
+numpy>=1.24
+pyodbc>=5.0
+sqlalchemy>=2.0
+tqdm>=4.60
+matplotlib>=3.7
+pyarrow>=12.0
+openpyxl>=3.1

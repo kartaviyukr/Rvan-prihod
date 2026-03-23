@@ -65,13 +65,13 @@ class Config:
     ]
 
     # === Пути к данным ===
-    DATA_DIR = PROJECT_ROOT / "data"
+    DATA_DIR = Path(os.environ.get("ETL_DATA_DIR", PROJECT_ROOT / "data"))
     RAW_DIR = DATA_DIR / "raw"
     INTERIM_DIR = DATA_DIR / "interim"
     PREPROC_DIR = DATA_DIR / "preproc_parquet"
     OUT_DIR = DATA_DIR / "result"
     HISTORY_DIR = DATA_DIR / "history"
-    LOG_DIR = PROJECT_ROOT / "logs"
+    LOG_DIR = Path(os.environ.get("ETL_LOG_DIR", PROJECT_ROOT / "logs"))
 
     PLOTS_DIR = OUT_DIR / "графики_остатков"
     EO_FILE = OUT_DIR / "EO.xlsx"
@@ -92,10 +92,7 @@ class Config:
     DB_DEST_DATABASE = os.environ.get("DB_DEST_DATABASE", "DWH_Analysis_Results")
 
     # === Python интерпретатор ===
-    PYTHON_EXE = os.environ.get(
-        "ETL_PYTHON_EXE",
-        r"C:\Проекты\Project_etl_power_bi\venv\Scripts\python.exe",
-    )
+    PYTHON_EXE = os.environ.get("ETL_PYTHON_EXE", "python")
 
     # === Праздники (Россия 2025-2026) ===
     RUSSIAN_HOLIDAYS: List[str] = [

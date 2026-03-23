@@ -1,0 +1,71 @@
+services:
+  # Полный ETL-пайплайн (загрузка + предобработка)
+  etl:
+    build: .
+    command: ["etl.py"]
+    volumes:
+      - etl-data:/data
+      - etl-logs:/logs
+    env_file: .env
+    environment:
+      - ETL_PROJECT_ROOT=/app
+
+  # Расчёт последней точки дефектуры
+  point-calculator:
+    build: .
+    command: ["-m", "pipeline.point_calculator"]
+    volumes:
+      - etl-data:/data
+      - etl-logs:/logs
+    env_file: .env
+    depends_on:
+      etl:
+        condition: service_completed_successfully
+
+  # Расчёт эпизодов дефектуры
+  episodes-calculator:
+    build: .
+    command: ["-m", "pipeline.episodes_calculator"]
+    volumes:
+      - etl-data:/data
+      - etl-logs:/logs
+    env_file: .env
+    depends_on:
+      etl:
+        condition: service_completed_successfully
+
+  # Объединение таблиц + Excel-отчёт
+  excel-process:
+    build: .
+    command: ["-m", "pipeline.excel_process"]
+    volumes:
+      - etl-data:/data
+      - etl-logs:/logs
+    env_file: .env
+    depends_on:
+      point-calculator:
+        condition: service_completed_successfully
+      episodes-calculator:
+        condition: service_completed_successfully
+
+  # Загрузка результатов в SQL Server
+  db-upload:
+    build: .
+    command: ["-m", "pipeline.db_uploader"]
+    volumes:
+      - etl-data:/data
+      - etl-logs:/logs
+    env_file: .env
+    depends_on:
+      excel-process:
+        condition: service_completed_successfully
+
+  # Тесты
+  test:
+    build: .
+    command: ["-m", "pytest", "tests/", "-v"]
+    profiles: ["test"]
+
+volumes:
+  etl-data:
+  etl-logs:

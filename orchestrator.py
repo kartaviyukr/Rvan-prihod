@@ -138,16 +138,12 @@ def run_script(script_info: dict) -> bool:
 
 
 def send_error_notification(failed_step: str, error_details: str):
-    """Уведомление об ошибке через Outlook."""
+    """Уведомление об ошибке (SMTP в Docker, Outlook на Windows)."""
+    subject = f"[ОШИБКА] ETL: {failed_step} ({datetime.now().strftime('%d.%m.%Y')})"
+    body = f"Этап: {failed_step}\n\n{error_details}\n\nЛоги: {LOG_FILE}"
     try:
-        import win32com.client as win32
-        outlook = win32.Dispatch("Outlook.Application")
-        mail = outlook.CreateItem(0)
-        mail.To = "; ".join(ERROR_RECIPIENTS)
-        mail.Subject = f"[ОШИБКА] ETL: {failed_step} ({datetime.now().strftime('%d.%m.%Y')})"
-        mail.Body = f"Этап: {failed_step}\n\n{error_details}\n\nЛоги: {LOG_FILE}"
-        mail.Importance = 2
-        mail.Send()
+        from pipeline.email_sender import _send_mail
+        _send_mail(ERROR_RECIPIENTS, subject, body, importance=2)
         logger.info("Уведомление об ошибке отправлено")
     except Exception as e:
         logger.error(f"Не удалось отправить уведомление: {e}")

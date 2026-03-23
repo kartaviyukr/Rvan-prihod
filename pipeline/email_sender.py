@@ -1,11 +1,20 @@
 """
-Автоматическая рассылка отчёта через Outlook
+Рассылка отчёта: Outlook COM (Windows) или SMTP (Docker/Linux)
+
+Переменные окружения для SMTP-режима:
+    SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_FROM
 """
 import os
 import shutil
 import tempfile
-import pandas as pd
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.base import MIMEBase
+from email import encoders
 from datetime import datetime
+
+import pandas as pd
 
 from config import Config
 
@@ -32,16 +41,6 @@ BODY = """Добрый день, коллеги!
 
 Благодарим за обратную связь по файлу.
 
-Сейчас в работе комментарии Алексея Александровича и Константина Николеавича:
-2. Добавить информацию о последней дате заказа, потребности, счёте - Срок от отдела Домино начало Апреля
-4. Добавить информацию о последней дате поступления на наш склад - Срок от отдела Домино начало Апреля
-5. Добавить информацию о товаре в пути - 19.03.26
-
-Обновление статуса:
-1. Добавить привязку "Прямой поставщик - Менеджер" - Сегодня тестируем добавление. Пока некорректный список.
-3. Проверить данные по продуктам СОЛГАР - Нашли ошибку в первоисточнике наших данных. Исправили.
-
-
 Во вложении новые данные по рваным приходам.
 Прошу взять в работу. Сообщение будет приходить во второй половине дня для изучения и проработки к следующему утру.
 Лист "Новые позиции" для оперативного разбора.
@@ -66,6 +65,73 @@ MAX_DAYS_SINCE_LAST_DEFECTURA = 7
 FILE_PATH = str(Config.OUT_DIR / "final_merged_table.xlsx")
 
 
+# ==============================
+# Выбор транспорта
+# ==============================
+
+def _use_smtp() -> bool:
+    """True если задан SMTP_HOST (Docker/Linux)"""
+    return bool(os.environ.get("SMTP_HOST"))
+
+
+def _send_smtp(recipients: list, subject: str, body: str, attachment: str = None, importance: int = 1):
+    """Отправка через SMTP."""
+    host = os.environ["SMTP_HOST"]
+    port = int(os.environ.get("SMTP_PORT", "587"))
+    user = os.environ.get("SMTP_USER", "")
+    password = os.environ.get("SMTP_PASSWORD", "")
+    from_addr = os.environ.get("SMTP_FROM", user)
+
+    msg = MIMEMultipart()
+    msg['From'] = from_addr
+    msg['To'] = ", ".join(recipients)
+    msg['Subject'] = subject
+    if importance == 2:
+        msg['X-Priority'] = '1'
+    msg.attach(MIMEText(body, 'plain', 'utf-8'))
+
+    if attachment and os.path.exists(attachment):
+        with open(attachment, 'rb') as f:
+            part = MIMEBase('application', 'octet-stream')
+            part.set_payload(f.read())
+            encoders.encode_base64(part)
+            part.add_header('Content-Disposition', f'attachment; filename="{os.path.basename(attachment)}"')
+            msg.attach(part)
+
+    with smtplib.SMTP(host, port) as server:
+        if port == 587:
+            server.starttls()
+        if user and password:
+            server.login(user, password)
+        server.sendmail(from_addr, recipients, msg.as_string())
+
+
+def _send_outlook(recipients: list, subject: str, body: str, attachment: str = None, importance: int = 1):
+    """Отправка через Outlook COM (только Windows)."""
+    import win32com.client as win32
+    outlook = win32.Dispatch("Outlook.Application")
+    mail = outlook.CreateItem(0)
+    mail.To = "; ".join(recipients)
+    mail.Subject = subject
+    mail.Body = body
+    mail.Importance = importance
+    if attachment:
+        mail.Attachments.Add(attachment)
+    mail.Send()
+
+
+def _send_mail(recipients: list, subject: str, body: str, attachment: str = None, importance: int = 1):
+    """Выбирает SMTP или Outlook в зависимости от окружения."""
+    if _use_smtp():
+        _send_smtp(recipients, subject, body, attachment, importance)
+    else:
+        _send_outlook(recipients, subject, body, attachment, importance)
+
+
+# ==============================
+# Валидация
+# ==============================
+
 def validate_data(filepath: str) -> tuple:
     """Проверяет данные перед отправкой. Returns (is_valid, errors, warnings)."""
     errors, warnings = [], []
@@ -82,7 +148,6 @@ def validate_data(filepath: str) -> tuple:
     if df.empty:
         return False, ["Лист 'Текущие' пустой"], []
 
-    # Свежесть данных
     date_col = 'Дата входа в дефектуру ФК Гранд Капитал'
     if date_col in df.columns:
         dates = pd.to_datetime(df[date_col], dayfirst=True, errors='coerce').dropna()
@@ -91,7 +156,6 @@ def validate_data(filepath: str) -> tuple:
             if days_since > MAX_DAYS_SINCE_LAST_DEFECTURA:
                 errors.append(f"Последняя дефектура {days_since} дней назад. Данные не обновляются!")
 
-    # Суммы по колонкам
     for col in VALIDATION_COLUMNS:
         if col not in df.columns:
             errors.append(f"Колонка '{col}' не найдена")
@@ -100,7 +164,6 @@ def validate_data(filepath: str) -> tuple:
         if col_sum < MIN_SUM_THRESHOLD:
             errors.append(f"'{col}' = {col_sum:.0f} (меньше {MIN_SUM_THRESHOLD})")
 
-    # Наличие листа «Завершившиеся»
     try:
         pd.read_excel(filepath, sheet_name='Завершившиеся')
     except Exception:
@@ -109,35 +172,24 @@ def validate_data(filepath: str) -> tuple:
     return len(errors) == 0, errors, warnings
 
 
-def _send_outlook_mail(recipients: list, subject: str, body: str, attachment: str = None, importance: int = 1):
-    """Отправляет письмо через Outlook COM."""
-    import win32com.client as win32
-    outlook = win32.Dispatch("Outlook.Application")
-    mail = outlook.CreateItem(0)
-    mail.To = "; ".join(recipients)
-    mail.Subject = subject
-    mail.Body = body
-    mail.Importance = importance
-    if attachment:
-        mail.Attachments.Add(attachment)
-    mail.Send()
-
+# ==============================
+# Отправка
+# ==============================
 
 def send_error_notification(errors: list, exception: str = None):
-    """Уведомление об ошибке разработчикам."""
     timestamp = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
     body = f"Отправка отчёта отменена.\nВремя: {timestamp}\nФайл: {FILE_PATH}\n\nОшибки:\n"
     body += '\n'.join(f"- {e}" for e in errors)
     if exception:
         body += f"\n\nИсключение:\n{exception}"
     try:
-        _send_outlook_mail(
+        _send_mail(
             ERROR_RECIPIENTS,
             f"ОШИБКА: Отчёт дефектуры не отправлен ({datetime.now().strftime('%d.%m.%Y')})",
             body, importance=2,
         )
     except Exception as e:
-        print(f"Не удалось отправить уведомление об ошибке: {e}")
+        print(f"Не удалось отправить уведомление: {e}")
 
 
 def send_email():
@@ -159,7 +211,7 @@ def send_email():
     shutil.copy2(FILE_PATH, tmp_path)
 
     try:
-        _send_outlook_mail(RECIPIENTS, SUBJECT, BODY, attachment=tmp_path)
+        _send_mail(RECIPIENTS, SUBJECT, BODY, attachment=tmp_path)
         print(f"Email отправлен: {', '.join(RECIPIENTS)}")
     finally:
         try:
@@ -170,7 +222,7 @@ def send_email():
 
     if warnings:
         try:
-            _send_outlook_mail(
+            _send_mail(
                 ERROR_RECIPIENTS,
                 f"Предупреждение: отчёт дефектуры ({date_str})",
                 "Отчёт отправлен с предупреждениями:\n" + '\n'.join(f"- {w}" for w in warnings),
